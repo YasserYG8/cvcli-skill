@@ -1,0 +1,66 @@
+{
+  "scanner_version": "0.1.0",
+  "path": "<local-path>/cvcli-skill",
+  "repo_name": "CVCLI-skill",
+  "readme": {
+    "file": "README.md",
+    "title": "cvcli",
+    "excerpt": "# cvcli\n\n**Turn your real code into honest CV bullets, a LinkedIn post and an X post, with one command and no fake metrics.**\n\n![Demo GIF placeholder](docs/demo.gif)\n<!-- TODO: record a short GIF of \"/cvcli\" running on a repo and save it as docs/demo.gif -->\n\ncvcli is an open-source [Agent Skill](https://agentskills.io) for Claude Code. It scans a git repository (languages, frameworks, Docker/CI/Kubernetes/Terraform, tests, git history), shows you a fact sheet, asks up to 3 questions, and then writes:\n\n- 3-5 ATS-friendly CV bullets (English or French)\n- a LinkedIn post (link goes in the first comment)\n- an X post + first reply (or a short thread)\n- a portfolio card\n\nIt is not magic. It gives you **consistency**: the same workflow every time, platform rules stored as Markdown files you can edit, and every claim checked against your actual repo.\n\n## Install (30 seconds)\n\nCopy the `cvcli/` folder into your skills folder.\n\n**For all your projects** (personal skill):\n\n```bash\ngit clone https://github.com/YasserYG8/cvcli-skill.git\ncp -r cvcli-skill/cvcli ~/.claude/skills/\n```\n\n**For one project only** (project skill, can be committed with the project):\n\n```bash\ncp -r cvcli-skill/cvcli <your-project>/.claude/skills/\n```\n\nWindows (PowerShell):\n\n```powershell\ngit clone https://github.com/YasserYG8/cvcli-skill.git\nCopy-Item -Recurse cvcli-skill\\cvcli \"$HOME\\.claude\\skills\\\"\n```\n\nRequirements: Python 3.9+ and git. No pip install, no API keys, no external services.\n\n## Usage\n\nIn Claude C",
+    "truncated": true,
+    "total_chars": 4572
+  },
+  "license": {
+    "file": "LICENSE",
+    "spdx_guess": "MIT"
+  },
+  "languages": [
+    {
+      "language": "Python",
+      "kind": "code",
+      "files": 2,
+      "lines": 993,
+      "share_of_code": 1.0
+    },
+    {
+      "language": "Markdown",
+      "kind": "markup",
+      "files": 9,
+      "lines": 547,
+      "share_of_code": null
+    }
+  ],
+  "manifests": [],
+  "frameworks": [],
+  "infra": {
+    "dockerfile": [],
+    "docker_compose": [],
+    "github_workflows": [],
+    "gitlab_ci": false,
+    "kubernetes": [],
+    "helm": [],
+    "terraform": [],
+    "ansible": []
+  },
+  "tests": {
+    "present": true,
+    "test_files": 1,
+    "frameworks": [
+      "pytest"
+    ]
+  },
+  "git": {
+    "available": true,
+    "is_repo": true,
+    "total_commits": 0,
+    "first_commit": null,
+    "last_commit": null,
+    "contributors": [],
+    "significant_contributors": 0,
+    "current_user": {
+      "email": "<your-git-email>",
+      "commits": 0,
+      "share": null
+    }
+  },
+  "errors": []
+}
