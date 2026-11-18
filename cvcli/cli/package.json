@@ -1,0 +1,7 @@
+{
+  "name": "cvcli-cli",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Internal package marker for the cvcli CLI (ES modules). Published from the repo root.",
+  "type": "module"
+}

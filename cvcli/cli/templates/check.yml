@@ -1,0 +1,35 @@
+# Made by cvcli. Checks that this CV package works before anyone runs it with npx.
+name: Check CV package
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["18", "lts/*"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Package contains the CLI and the CV
+        run: |
+          npm pack --dry-run --json > pack-files.json
+          node -e "
+            const files = require('./pack-files.json')[0].files.map((f) => f.path);
+            for (const need of ['package.json', 'bin/cli.js', 'cv.json']) {
+              if (!files.includes(need)) {
+                console.error(need + ' is not in the package. Check the \"files\" list in package.json.');
+                process.exit(1);
+              }
+            }
+            console.log('Package files OK: ' + files.join(', '));
+          "
+
+      - name: CV renders
+        run: node bin/cli.js --print

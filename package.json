@@ -1,0 +1,27 @@
+{
+  "name": "cvcli",
+  "version": "0.1.0",
+  "description": "Check, preview and pack an honest CV.md into a terminal CV you can share with npx.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "cvcli": "cvcli/cli/bin/cvcli.js"
+  },
+  "files": [
+    "cvcli/cli/bin/",
+    "cvcli/cli/lib/",
+    "cvcli/cli/templates/",
+    "cvcli/cli/package.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test cvcli/cli/test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YasserYG8/cvcli-skill.git"
+  },
+  "keywords": ["cv", "resume", "terminal", "cli", "claude-code", "agent-skill"]
+}

@@ -2,9 +2,9 @@
 name: cvcli
 description: Builds an honest, evidence-based developer CV as a CV.md file, or turns one git repository into CV bullets, a LinkedIn post, an X/Twitter post or a portfolio card, in English or French. Scans repos (languages, frameworks, infra, tests, git history), reads the user's old CV, website or profile text, asks a few questions, then writes only claims the sources or the user can back up. Use when the user asks to write, build, update or check their CV or resume, create a CV.md, or turn a project, repo or codebase into CV or resume bullets, a portfolio entry, a LinkedIn post, a tweet or X thread.
 license: MIT
-compatibility: Needs Python 3.9+ and git on PATH. Built for Claude Code; works in any Agent Skills client that can run scripts.
+compatibility: Needs Python 3.9+ and git on PATH; the optional terminal CV also needs Node.js 18+. Built for Claude Code; works in any Agent Skills client that can run scripts.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # cvcli
@@ -19,7 +19,7 @@ If the request is not clear, ask once, in one message:
 3. For a full CV: which sources can you use? (old CV file, website, LinkedIn text, GitHub repos or profile)
 
 Then:
-- **Full CV** → read [references/full-cv.md](references/full-cv.md) (workflow) and [templates/cv-full.md](templates/cv-full.md) (output format), plus [references/cv-rules.md](references/cv-rules.md) and [references/style-guide.md](references/style-guide.md). Follow the full-cv.md workflow. The honesty rules below still apply.
+- **Full CV** → read [references/full-cv.md](references/full-cv.md) (workflow) and [templates/cv-full.md](templates/cv-full.md) (output format), plus [references/cv-rules.md](references/cv-rules.md) and [references/style-guide.md](references/style-guide.md). Follow the full-cv.md workflow. The honesty rules below still apply. Its last step offers a **terminal CV**: the bundled CLI (`node ${CLAUDE_SKILL_DIR}/cli/bin/cvcli.js check|view|pack <CV.md>`) checks CV.md and packs it into a folder people can run with `npx`. Run it; do not read its source.
 - **One project** → follow the "Project workflow" below.
 
 ## Honesty rules (non-negotiable)

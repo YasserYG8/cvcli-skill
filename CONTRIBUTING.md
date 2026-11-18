@@ -8,7 +8,8 @@ Thanks for helping. Small, focused pull requests are easiest to review.
 git clone https://github.com/YasserYG8/cvcli-skill.git
 cd cvcli-skill
 pip install pytest
-python -m pytest -q
+python -m pytest -q   # scanner (Python 3.9+)
+npm test              # terminal CV CLI (Node.js 18+)
 ```
 
 To try your changes in Claude Code, copy (or symlink) `cvcli/` into `~/.claude/skills/cvcli`. Claude Code picks up edits without a restart.
@@ -37,6 +38,13 @@ To try your changes in Claude Code, copy (or symlink) `cvcli/` into `~/.claude/s
 - Add a test in `tests/test_scan_repo.py` for every new detection rule.
 - Keep values explained: no magic numbers without a comment.
 
+## Improve the terminal CV CLI (`cvcli/cli/`)
+
+- **Zero dependencies, no build step.** Only Node.js built-in modules (`node:fs`, `node:readline`...), plain JavaScript ES modules, Node 18+ APIs only. This is what makes `npx github:...` work: npx runs the files in git, so nothing may depend on a build output or on `node_modules`.
+- `lib/viewer.js` is copied unchanged into every generated package as `bin/cli.js`. It must stay one self-contained file (no imports from other `lib/` files).
+- The CV.md format is a contract. If you change a section name in `cvcli/templates/cv-full.md`, change `SECTIONS` in `lib/parse.js` too; a test checks that they match.
+- Add a `node:test` test in `cvcli/cli/test/` for every new behavior.
+
 ## Honesty rules for contributions
 
 Examples in references, templates and `examples/` must follow the same rules as the skill:
@@ -45,6 +53,6 @@ Examples in references, templates and `examples/` must follow the same rules as 
 
 ## Before you open a PR
 
-- `python -m pytest -q` passes.
+- `python -m pytest -q` and `npm test` pass.
 - `SKILL.md` stays short (well under 500 lines). Put details in `references/`.
 - Paths use forward slashes.

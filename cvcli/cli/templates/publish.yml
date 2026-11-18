@@ -1,0 +1,52 @@
+# Made by cvcli. Publishes this CV package to npm when you push a tag like v1.2.0.
+# Uses npm trusted publishing (OIDC): no npm token is stored in this repo.
+# Setup steps are in PUBLISHING.md.
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # lets GitHub prove to npm that this workflow is allowed to publish
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # Trusted publishing needs npm 11.5.1+ and Node 22.14+; Node 24 ships both.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Tag matches package.json version
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION."
+            echo "Change \"version\" in package.json, commit, and push a new tag."
+            exit 1
+          fi
+
+      - name: Package contains the CLI and the CV
+        run: |
+          npm pack --dry-run --json > pack-files.json
+          node -e "
+            const files = require('./pack-files.json')[0].files.map((f) => f.path);
+            for (const need of ['package.json', 'bin/cli.js', 'cv.json']) {
+              if (!files.includes(need)) {
+                console.error(need + ' is not in the package.');
+                process.exit(1);
+              }
+            }
+          "
+
+      - name: CV renders
+        run: node bin/cli.js --print
+
+      - name: Publish
+        run: npm publish --access public

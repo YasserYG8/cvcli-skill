@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    name: Scanner (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.x"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install pytest
+      - run: python -m pytest -q
+
+  node:
+    name: CLI (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["18", "lts/*"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+      # The same check the generated packages run: the published files must contain the CLI.
+      - name: Package contains the CLI
+        run: |
+          npm pack --dry-run --json > pack-files.json
+          node -e "
+            const files = require('./pack-files.json')[0].files.map((f) => f.path);
+            for (const need of ['cvcli/cli/bin/cvcli.js', 'cvcli/cli/lib/viewer.js', 'cvcli/cli/templates/PUBLISHING.md', 'cvcli/cli/package.json']) {
+              if (!files.includes(need)) { console.error(need + ' is not in the package'); process.exit(1); }
+            }
+          "
+      - name: npx from this folder works
+        run: npx --yes ./ check cvcli/cli/test/fixtures/sample-cv.md

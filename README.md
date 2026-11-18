@@ -42,7 +42,7 @@ git clone https://github.com/YasserYG8/cvcli-skill.git
 Copy-Item -Recurse cvcli-skill\cvcli "$HOME\.claude\skills\"
 ```
 
-Requirements: Python 3.9+ and git. No pip install, no API keys, no external services.
+Requirements: Python 3.9+ and git. The optional terminal CV also needs Node.js 18+. No pip or npm install, no API keys, no external services.
 
 ## Usage
 
@@ -77,6 +77,46 @@ You can also run the scanner alone:
 python3 cvcli/scripts/scan_repo.py /path/to/repo
 ```
 
+## Terminal CV
+
+After writing your `CV.md`, cvcli can turn it into a CV that people run in their terminal. The CLI comes with the skill (no install), and you can also run it straight from GitHub:
+
+```bash
+npx github:YasserYG8/cvcli-skill check CV.md     # check the format and list [placeholders?]
+npx github:YasserYG8/cvcli-skill view CV.md      # preview it (letters jump to sections, t changes the layout, q quits)
+npx github:YasserYG8/cvcli-skill pack CV.md      # make a shareable folder, e.g. ./ada-lovelace-cv/
+```
+
+**Choose a look.** There are 3 layouts and 5 accent colors:
+
+| Layout | Looks like |
+| --- | --- |
+| `sidebar` (default) | a framed card: the section list on the left, one section on the right |
+| `classic` | a paper CV: contact, skills and languages in a left column, the rest on the right, one page you scroll |
+| `manpage` | a Unix manual page: `NAME`, `DESCRIPTION`, `EXPERIENCE`… |
+
+Accents: `teal` (default), `blue`, `violet`, `green`, `amber`. Everything else is neutral gray, and colors adapt to your terminal (truecolor, 256 or 16 colors; `NO_COLOR` turns them off).
+
+```bash
+cvcli view CV.md --gallery                          # try every layout (t) and accent (a) on your real CV, Enter to choose
+cvcli view CV.md --layout classic --accent violet   # preview one look
+cvcli pack CV.md --layout classic --accent violet   # save it as the default of your package
+```
+
+The look is saved in the package's `cv.json`, not in `CV.md`. People who run your CV can press `t` to switch layouts. `--print` is always plain text, the same for every layout.
+
+`pack` asks which contact details to include (the phone is off by default), then creates a small package with **no dependencies and no build step**. You can share it at three levels:
+
+| Level | People run | You need |
+| --- | --- | --- |
+| 1. Test on your computer | `npx ./ada-lovelace-cv` | Node.js |
+| 2. Share from GitHub | `npx github:<you>/ada-lovelace-cv` | a public GitHub repo (no npm account) |
+| 3. Publish on npm | `npx ada-lovelace-cv` | an npm account; the generated `PUBLISHING.md` walks you through it |
+
+The folder includes two GitHub Actions workflows. `check.yml` runs on every push and fails if the package would not run. `publish.yml` publishes to npm when you push a version tag, with npm trusted publishing, so no token is stored in your repo.
+
+**Why "no build step" matters:** `npx github:...` runs the files that are in git. If a package's `bin` points to a build folder that is gitignored (like `dist/`), it works from npm but fails from GitHub with `command not found`. cvcli packages are plain JavaScript files, so the same folder works at all three levels.
+
 ## No fake metrics
 
 Most AI-written CV bullets say things like "improved performance by 40% for 10,000 users". Recruiters see this all the time, and an interviewer can ask you about it. cvcli follows strict rules:
@@ -101,8 +141,14 @@ cvcli/                  # the skill (this is what you install)
 │   ├── cv-full.md      # CV.md format (front matter + fixed sections)
 │   ├── cv-section.md
 │   └── portfolio-card.md
-└── scripts/
-    └── scan_repo.py    # stdlib-only repo scanner (JSON output)
+├── scripts/
+│   └── scan_repo.py    # stdlib-only repo scanner (JSON output)
+└── cli/                # terminal CV: check, view, pack (Node.js, no dependencies)
+    ├── bin/cvcli.js
+    ├── lib/            # parse.js, viewer.js (also the generated bin/cli.js), pack.js
+    ├── templates/      # files of the generated package (workflows, README, PUBLISHING.md)
+    └── test/           # node:test tests
+package.json            # makes `npx github:YasserYG8/cvcli-skill` work
 examples/               # dry run output
 tests/                  # pytest tests for the scanner
 ```
@@ -121,7 +167,8 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
 pip install pytest
-python -m pytest -q
+python -m pytest -q   # scanner
+npm test              # terminal CV CLI (Node.js 18+)
 ```
 
 ## License
