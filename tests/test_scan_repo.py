@@ -132,13 +132,72 @@ def test_full_fake_repo(tmp_path):
     assert g["total_commits"] == 3
     assert g["first_commit"].startswith("2024-01-10")
     assert g["last_commit"].startswith("2024-03-05")
-    by_email = {c["email"]: c for c in g["contributors"]}
-    assert by_email["alice@example.com"]["commits"] == 2
-    assert by_email["alice@example.com"]["share"] == pytest.approx(0.667, abs=0.001)
-    assert by_email["bob@example.com"]["share"] == pytest.approx(0.333, abs=0.001)
+    by_name = {c["name"]: c for c in g["contributors"]}
+    assert by_name["Alice Dev"]["commits"] == 2
+    assert by_name["Alice Dev"]["share"] == pytest.approx(0.667, abs=0.001)
+    assert by_name["Bob Dev"]["share"] == pytest.approx(0.333, abs=0.001)
+    # Bob added 1 line (api/extra.py); lock file and node_modules lines are not counted.
+    assert by_name["Bob Dev"]["lines_added"] == 1
+    assert by_name["Alice Dev"]["lines_added"] > 20
     assert g["significant_contributors"] == 2
     assert g["current_user"]["email"] == "alice@example.com"
+    assert g["current_user"]["matched_by"] == "email"
     assert g["current_user"]["commits"] == 2
+
+
+@needs_git
+def test_same_person_with_noreply_email_is_merged(tmp_path):
+    """GitHub web merges use a noreply email; the user is matched by name."""
+    git_init(tmp_path, user_email="me@gmail.example")
+    git(tmp_path, "config", "user.name", "YasserDev")
+    write(tmp_path, "a.py", "a = 1\n")
+    commit(tmp_path, "local", ("YasserDev", "me@gmail.example"), "2024-01-01T00:00:00+00:00")
+    write(tmp_path, "b.py", "b = 1\nc = 2\n")
+    commit(tmp_path, "merged PR", ("YasserDev", "123+YasserDev@users.noreply.github.com"),
+           "2024-01-02T00:00:00+00:00")
+    write(tmp_path, "c.py", "d = 1\n" * 50)
+    commit(tmp_path, "teammate", BOB, "2024-01-03T00:00:00+00:00")
+
+    g = scan_repo.scan(str(tmp_path))["git"]
+    names = [c["name"] for c in g["contributors"]]
+    assert names.count("YasserDev") == 1
+    me = g["current_user"]
+    assert me["commits"] == 2
+    assert me["lines_added"] == 3
+    assert me["matched_by"] == "email"
+
+
+@needs_git
+def test_current_user_matched_by_name_only(tmp_path):
+    git_init(tmp_path, user_email="other@gmail.example")
+    git(tmp_path, "config", "user.name", "YasserDev")
+    write(tmp_path, "a.py", "a = 1\n")
+    commit(tmp_path, "merged PR", ("YasserDev", "123+YasserDev@users.noreply.github.com"),
+           "2024-01-01T00:00:00+00:00")
+    write(tmp_path, "b.py", "b = 1\n")
+    commit(tmp_path, "teammate", BOB, "2024-01-02T00:00:00+00:00")
+
+    me = scan_repo.scan(str(tmp_path))["git"]["current_user"]
+    assert me["matched_by"] == "name"
+    assert me["commits"] == 1
+    assert me["share"] == 0.5
+
+
+@needs_git
+def test_few_commits_but_many_lines_is_significant(tmp_path):
+    """A squash-merged PR is 1 commit but can be most of the code."""
+    git_init(tmp_path)
+    for i in range(10):
+        write(tmp_path, "small{}.py".format(i), "x = {}\n".format(i))
+        commit(tmp_path, "small {}".format(i), ALICE, "2024-01-{:02d}T00:00:00+00:00".format(i + 1))
+    write(tmp_path, "big.py", "y = 1\n" * 200)
+    commit(tmp_path, "squash merge", BOB, "2024-02-01T00:00:00+00:00")
+
+    g = scan_repo.scan(str(tmp_path))["git"]
+    bob = [c for c in g["contributors"] if c["name"] == "Bob Dev"][0]
+    assert bob["share"] < scan_repo.SIGNIFICANT_SHARE
+    assert bob["lines_added_share"] > 0.9
+    assert g["significant_contributors"] == 2
 
 
 @needs_git
@@ -166,7 +225,9 @@ def test_empty_git_repo(tmp_path):
     assert g["first_commit"] is None
     assert g["last_commit"] is None
     assert g["contributors"] == []
-    assert g["current_user"] == {"email": "alice@example.com", "commits": 0, "share": None}
+    assert g["current_user"]["email"] == "alice@example.com"
+    assert g["current_user"]["commits"] == 0
+    assert g["current_user"]["share"] is None
 
 
 @needs_git
@@ -224,10 +285,20 @@ def test_other_manifests(tmp_path):
 
 def test_pytest_found_from_imports(tmp_path):
     write(tmp_path, "tests/test_x.py", "import pytest\n\ndef test_x():\n    assert True\n")
-    write(tmp_path, ".claude/settings.local.json", "{}\n")  # tool config, must be skipped
     result = scan_repo.scan(str(tmp_path))
     assert result["tests"]["frameworks"] == ["pytest"]
-    assert all(l["language"] != "JSON" for l in result["languages"])
+
+
+def test_hidden_tool_folders_are_skipped(tmp_path):
+    """AI agent folders (.claude, .agents...) often hold third-party code; CI folders stay."""
+    write(tmp_path, "main.py", "print(1)\n")
+    write(tmp_path, ".claude/settings.local.json", "{}\n")
+    write(tmp_path, ".agents/skills/x/scripts/big.js", "var a = 1;\n" * 5000)
+    write(tmp_path, ".github/workflows/ci.yml", "name: CI\non: push\njobs: {}\n")
+    result = scan_repo.scan(str(tmp_path))
+    langs = {l["language"] for l in result["languages"]}
+    assert "JavaScript" not in langs and "JSON" not in langs
+    assert result["infra"]["github_workflows"] == [".github/workflows/ci.yml"]
 
 
 def test_broken_manifest_is_reported_not_fatal(tmp_path):

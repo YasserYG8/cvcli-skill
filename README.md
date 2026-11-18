@@ -5,7 +5,11 @@
 ![Demo GIF placeholder](docs/demo.gif)
 <!-- TODO: record a short GIF of "/cvcli" running on a repo and save it as docs/demo.gif -->
 
-cvcli is an open-source [Agent Skill](https://agentskills.io) for Claude Code. It scans a git repository (languages, frameworks, Docker/CI/Kubernetes/Terraform, tests, git history), shows you a fact sheet, asks up to 3 questions, and then writes:
+cvcli is an open-source [Agent Skill](https://agentskills.io) for Claude Code. It has two modes.
+
+**Full CV.** Give it your sources: an old CV (PDF), your website, your GitHub repos. It scans every repo, checks what your old CV claims against the code, asks about what it cannot know (availability, interests, which contact details to show), and writes a complete `CV.md`: summary, experience, projects, open source, skills, education, languages, interests. The file has a fixed structure (YAML front matter + fixed section names), so other tools can read it.
+
+**One project.** It scans a git repository (languages, frameworks, Docker/CI/Kubernetes/Terraform, tests, git history), shows you a fact sheet, asks up to 3 questions, and then writes:
 
 - 3-5 ATS-friendly CV bullets (English or French)
 - a LinkedIn post (link goes in the first comment)
@@ -51,6 +55,7 @@ In Claude Code, inside your project:
 Or just ask in plain words; the skill loads by itself:
 
 ```
+Build my full CV. Here is my old CV (cv.pdf), my site example.dev and my GitHub github.com/me.
 Turn this repo into 4 CV bullets for a junior DevOps job.
 Write a LinkedIn post about ~/code/shop-api, in French.
 Give me an X post and a portfolio card for this project.
@@ -77,7 +82,7 @@ python3 cvcli/scripts/scan_repo.py /path/to/repo
 Most AI-written CV bullets say things like "improved performance by 40% for 10,000 users". Recruiters see this all the time, and an interviewer can ask you about it. cvcli follows strict rules:
 
 - **No invented numbers.** No users, stars, speedups or savings that you did not give. A missing number stays visible as `[metric?]`, so you can fill it in or delete it.
-- **No fake solo work.** If git history shows other people with a real share of the commits (10% or more, bots excluded), cvcli asks what *your* role was before writing "built".
+- **No fake solo work.** If git history shows other people with a real share of the commits or added lines (10% or more, bots excluded), cvcli asks what *your* role was before writing "built". Your commits are matched by email or git user name, so GitHub "noreply" merges still count as yours.
 - **No README hype.** If the README says "Kubernetes-ready" but there is no Kubernetes manifest, cvcli flags it instead of repeating it.
 - **Commit share is not code share.** cvcli does not turn "60% of commits" into "wrote 60% of the code".
 
@@ -87,11 +92,13 @@ Most AI-written CV bullets say things like "improved performance by 40% for 10,0
 cvcli/                  # the skill (this is what you install)
 ├── SKILL.md            # workflow + honesty rules (short)
 ├── references/         # platform rules, loaded only when needed
+│   ├── full-cv.md      # full CV workflow
 │   ├── cv-rules.md
 │   ├── linkedin.md
 │   ├── x.md
 │   └── style-guide.md
 ├── templates/          # output templates
+│   ├── cv-full.md      # CV.md format (front matter + fixed sections)
 │   ├── cv-section.md
 │   └── portfolio-card.md
 └── scripts/

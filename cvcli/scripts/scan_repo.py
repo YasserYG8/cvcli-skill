@@ -30,11 +30,12 @@ MAX_FILE_BYTES = 1_000_000
 # YAML and test files are read only at the start (Kubernetes / Ansible / test imports).
 YAML_SNIFF_BYTES = 4096
 
-# A contributor with at least this share of commits counts as "significant".
+# A contributor with at least this share of commits (or of added lines) is "significant".
 SIGNIFICANT_SHARE = 0.10
 
-# Git calls should be fast; this protects against a hung git process.
-GIT_TIMEOUT_SECONDS = 30
+# `git log --numstat` takes a few seconds even on repos with thousands of commits;
+# this only protects against a hung git process.
+GIT_TIMEOUT_SECONDS = 60
 
 # Max dependency names listed per manifest, to keep the JSON readable.
 MAX_DEPS_PER_MANIFEST = 40
@@ -43,8 +44,12 @@ SKIP_DIRS = {
     ".git", "node_modules", "vendor", "dist", "build", ".venv", "venv", "env",
     "__pycache__", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
     ".next", ".nuxt", "target", ".gradle", ".idea", ".vscode", "coverage",
-    ".terraform", "bower_components", "site-packages", ".claude",
+    ".terraform", "bower_components", "site-packages",
 }
+
+# Hidden folders are skipped (tool config, AI agent folders like .claude/.agents,
+# caches), except these, which hold CI and dev-environment files.
+KEEP_HIDDEN_DIRS = {".github", ".gitlab", ".circleci", ".devcontainer", ".gitea", ".buildkite"}
 
 LOCK_FILES = {
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "npm-shrinkwrap.json",
@@ -101,6 +106,8 @@ KNOWN_FRAMEWORKS = {
     "typescript": "TypeScript", "tailwindcss": "Tailwind CSS",
     "prisma": "Prisma", "@prisma/client": "Prisma", "mongoose": "Mongoose",
     "sequelize": "Sequelize", "typeorm": "TypeORM", "drizzle-orm": "Drizzle",
+    "expo": "Expo", "expo-router": "Expo Router",
+    "react-native-reanimated": "Reanimated", "expo-notifications": "Expo Notifications",
     "socket.io": "Socket.IO", "graphql": "GraphQL", "@apollo/server": "Apollo",
     "redux": "Redux", "@reduxjs/toolkit": "Redux Toolkit",
     "jest": "Jest", "vitest": "Vitest", "mocha": "Mocha",
@@ -113,11 +120,18 @@ KNOWN_FRAMEWORKS = {
     "torch": "PyTorch", "tensorflow": "TensorFlow", "streamlit": "Streamlit",
     "pytest": "pytest", "requests": "requests", "httpx": "HTTPX",
     "boto3": "AWS SDK (boto3)", "click": "Click", "typer": "Typer",
+    "scipy": "SciPy", "librosa": "Librosa", "whisperx": "WhisperX",
+    "transformers": "Hugging Face Transformers", "pymongo": "MongoDB (PyMongo)",
+    "motor": "MongoDB (Motor)", "redis": "Redis", "psycopg2": "PostgreSQL (psycopg2)",
+    "psycopg2-binary": "PostgreSQL (psycopg2)", "asyncpg": "PostgreSQL (asyncpg)",
     # Go
     "github.com/gin-gonic/gin": "Gin", "github.com/labstack/echo": "Echo",
     "github.com/labstack/echo/v4": "Echo", "github.com/gofiber/fiber/v2": "Fiber",
     "gorm.io/gorm": "GORM", "github.com/spf13/cobra": "Cobra",
     "github.com/go-chi/chi/v5": "chi", "google.golang.org/grpc": "gRPC",
+    "github.com/cilium/ebpf": "eBPF (cilium/ebpf)",
+    "github.com/charmbracelet/bubbletea": "Bubble Tea",
+    "github.com/prometheus/client_golang": "Prometheus client",
     # PHP
     "laravel/framework": "Laravel", "symfony/framework-bundle": "Symfony",
     "phpunit/phpunit": "PHPUnit", "slim/slim": "Slim",
@@ -204,12 +218,23 @@ def walk_repo(root: str, errors: List[str]) -> List[str]:
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=on_error):
         # Edit dirnames in place so os.walk does not enter skipped folders.
-        dirnames[:] = sorted(
-            d for d in dirnames
-            if d not in SKIP_DIRS and not d.endswith(".egg-info"))
+        dirnames[:] = sorted(d for d in dirnames if not is_skipped_dir(d))
         for name in sorted(filenames):
             files.append(os.path.join(dirpath, name))
     return files
+
+
+def is_skipped_dir(name: str) -> bool:
+    """Dependencies, build output, caches and hidden tool folders."""
+    if name in SKIP_DIRS or name.endswith(".egg-info"):
+        return True
+    return name.startswith(".") and name not in KEEP_HIDDEN_DIRS
+
+
+def is_noise_path(relpath: str) -> bool:
+    """True for a repo-relative path that the scan would skip (used for git stats)."""
+    parts = relpath.replace("\\", "/").split("/")
+    return is_noise_file(parts[-1]) or any(is_skipped_dir(p) for p in parts[:-1])
 
 
 def is_noise_file(name: str) -> bool:
@@ -627,11 +652,12 @@ def scan_git(root: str, errors: List[str]) -> dict:
     info["is_repo"] = True
 
     try:
-        email_proc = run_git(root, ["config", "user.email"])
-        user_email = email_proc.stdout.strip().lower() or None
+        user_email = run_git(root, ["config", "user.email"]).stdout.strip().lower() or None
+        user_name = run_git(root, ["config", "user.name"]).stdout.strip() or None
 
-        # "-- ." limits history to this folder when scanning part of a bigger repo.
-        log = run_git(root, ["log", "--format=%aN%x09%aE%x09%aI", "--", "."])
+        # One header line per commit (starts with \x1e), then --numstat lines
+        # "added<TAB>deleted<TAB>path". "-- ." limits history to this folder.
+        log = run_git(root, ["log", "--numstat", "--format=%x1e%aN%x09%aE%x09%aI", "--", "."])
     except (OSError, subprocess.SubprocessError) as err:
         errors.append("git log failed: {}".format(err))
         return info
@@ -641,46 +667,98 @@ def scan_git(root: str, errors: List[str]) -> dict:
         info["total_commits"] = 0
         info["contributors"] = []
         info["significant_contributors"] = 0
-        if user_email:
-            info["current_user"] = {"email": user_email, "commits": 0, "share": None}
+        if user_email or user_name:
+            info["current_user"] = {
+                "name": user_name, "email": user_email, "matched_by": None,
+                "commits": 0, "share": None, "lines_added": 0, "lines_added_share": None,
+            }
         return info
 
-    commits = [line.split("\t") for line in log.stdout.splitlines() if line.count("\t") == 2]
+    commits = parse_git_log(log.stdout)
     total = len(commits)
+    total_added = sum(c["added"] for c in commits)
     info["total_commits"] = total
     if total:
         # Compare real datetimes: plain string sort is wrong across time zones.
-        dates = sorted((c[2] for c in commits), key=parse_iso)
+        dates = sorted((c["date"] for c in commits), key=parse_iso)
         info["first_commit"] = dates[0]
         info["last_commit"] = dates[-1]
 
-    # Group by email (lowercase); keep the most recent name seen.
-    by_email = {}
-    for name, email, _date in commits:
-        key = email.lower()
-        if key not in by_email:
-            by_email[key] = {"name": name, "email": key, "commits": 0}
-        by_email[key]["commits"] += 1
+    # Group by author name, not email: GitHub web merges use a "noreply" email,
+    # so one person often has two emails in the same repo.
+    people = {}
+    for commit in commits:
+        key = commit["name"].strip().lower() or commit["email"]
+        if key not in people:
+            people[key] = {"name": commit["name"], "emails": [], "commits": 0,
+                           "lines_added": 0, "lines_deleted": 0}
+        person = people[key]
+        if commit["email"] not in person["emails"]:
+            person["emails"].append(commit["email"])
+        person["commits"] += 1
+        person["lines_added"] += commit["added"]
+        person["lines_deleted"] += commit["deleted"]
 
     contributors = []
-    for entry in by_email.values():
-        is_bot = "[bot]" in entry["name"].lower() or "[bot]" in entry["email"]
-        entry["share"] = round(entry["commits"] / total, 3) if total else None
-        entry["bot"] = is_bot
-        contributors.append(entry)
-    contributors.sort(key=lambda e: (-e["commits"], e["email"]))
+    for person in people.values():
+        person["share"] = round(person["commits"] / total, 3) if total else None
+        person["lines_added_share"] = (
+            round(person["lines_added"] / total_added, 3) if total_added else None)
+        person["bot"] = ("[bot]" in person["name"].lower()
+                         or any("[bot]" in e for e in person["emails"]))
+        contributors.append(person)
+    contributors.sort(key=lambda e: (-e["commits"], e["name"].lower()))
     info["contributors"] = contributors
+    # Significant = enough commits OR enough added lines (squash merges hide work).
     info["significant_contributors"] = sum(
-        1 for c in contributors if not c["bot"] and (c["share"] or 0) >= SIGNIFICANT_SHARE)
+        1 for c in contributors if not c["bot"] and (
+            (c["share"] or 0) >= SIGNIFICANT_SHARE
+            or (c["lines_added_share"] or 0) >= SIGNIFICANT_SHARE))
 
-    if user_email:
-        mine = by_email.get(user_email, {}).get("commits", 0)
+    if user_email or user_name:
+        me, matched_by = None, None
+        for person in contributors:
+            if user_email and user_email in person["emails"]:
+                me, matched_by = person, "email"
+                break
+            if user_name and person["name"].strip().lower() == user_name.lower():
+                me, matched_by = person, "name"
         info["current_user"] = {
+            "name": user_name,
             "email": user_email,
-            "commits": mine,
-            "share": round(mine / total, 3) if total else None,
+            "matched_by": matched_by,
+            "commits": me["commits"] if me else 0,
+            "share": me["share"] if me else (0.0 if total else None),
+            "lines_added": me["lines_added"] if me else 0,
+            "lines_added_share": me["lines_added_share"] if me else (0.0 if total_added else None),
         }
     return info
+
+
+def parse_git_log(text: str) -> List[dict]:
+    """Parse `git log --numstat` output made with the \\x1e header format."""
+    commits = []
+    current = None
+    # Not splitlines(): it also splits on \x1e, our commit marker.
+    for line in text.replace("\r\n", "\n").split("\n"):
+        if line.startswith("\x1e"):
+            parts = line[1:].split("\t")
+            if len(parts) != 3:
+                current = None
+                continue
+            current = {"name": parts[0], "email": parts[1].lower(), "date": parts[2],
+                       "added": 0, "deleted": 0}
+            commits.append(current)
+            continue
+        parts = line.split("\t")
+        # Binary files show "-" instead of numbers; skip them and noise files.
+        if current is None or len(parts) != 3 or not parts[0].isdigit():
+            continue
+        if is_noise_path(parts[2]):
+            continue
+        current["added"] += int(parts[0])
+        current["deleted"] += int(parts[1]) if parts[1].isdigit() else 0
+    return commits
 
 
 # ---------------------------------------------------------------- main
