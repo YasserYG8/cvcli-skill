@@ -1,0 +1,12 @@
+# Use LF line endings on every system, also on Windows with core.autocrlf=true.
+# cvcli pack copies files from disk, and a CRLF shebang breaks on Linux/macOS.
+* text=auto eol=lf
+
+# Never change binary files.
+*.pdf  binary
+*.png  binary
+*.gif  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.webp binary

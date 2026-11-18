@@ -52,6 +52,16 @@ function readTemplate(file) {
   return fs.readFileSync(path.join(TEMPLATES, file), "utf8");
 }
 
+/**
+ * Write a text file with LF line endings only. On Windows, git may check the
+ * sources out with CRLF, and a "#!/usr/bin/env node\r" shebang breaks on Linux/macOS.
+ */
+export function writeText(file, content) {
+  fs.writeFileSync(file, String(content).replace(/\r\n?/g, "\n"));
+}
+
+const PACKAGE_GITATTRIBUTES = "# Keep LF line endings, also on Windows (the bin/cli.js shebang needs it).\n* text=auto eol=lf\n";
+
 function isNonEmptyDir(dir) {
   try {
     return fs.readdirSync(dir).length > 0;
@@ -164,17 +174,20 @@ export async function pack(file, opts = {}, io = { stdin: process.stdin, stdout:
 
   fs.mkdirSync(path.join(dir, "bin"), { recursive: true });
   fs.mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
-  fs.writeFileSync(path.join(dir, "cv.json"), JSON.stringify(data, null, 2) + "\n");
+  // Every text file goes through writeText, so the package has LF line endings only.
+  writeText(path.join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
+  writeText(path.join(dir, "cv.json"), JSON.stringify(data, null, 2) + "\n");
   const cliFile = path.join(dir, "bin", "cli.js");
-  fs.copyFileSync(VIEWER, cliFile);
+  writeText(cliFile, fs.readFileSync(VIEWER, "utf8"));
   try { fs.chmodSync(cliFile, 0o755); } catch { /* not needed on Windows */ }
-  fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n*.tgz\n");
-  fs.writeFileSync(path.join(dir, ".github", "workflows", "check.yml"), readTemplate("check.yml"));
-  fs.writeFileSync(path.join(dir, ".github", "workflows", "publish.yml"), readTemplate("publish.yml"));
-  fs.writeFileSync(path.join(dir, "PUBLISHING.md"), fill(readTemplate("PUBLISHING.md"), values));
+  writeText(path.join(dir, ".gitignore"), "node_modules/\n*.tgz\n");
+  const gitattributes = path.join(dir, ".gitattributes");
+  if (!fs.existsSync(gitattributes)) writeText(gitattributes, PACKAGE_GITATTRIBUTES);
+  writeText(path.join(dir, ".github", "workflows", "check.yml"), readTemplate("check.yml"));
+  writeText(path.join(dir, ".github", "workflows", "publish.yml"), readTemplate("publish.yml"));
+  writeText(path.join(dir, "PUBLISHING.md"), fill(readTemplate("PUBLISHING.md"), values));
   const readme = path.join(dir, "README.md");
-  if (!fs.existsSync(readme)) fs.writeFileSync(readme, fill(readTemplate("README.md"), values));
+  if (!fs.existsSync(readme)) writeText(readme, fill(readTemplate("README.md"), values));
 
   return { dir, name, binName, contacts, warnings, display };
 }

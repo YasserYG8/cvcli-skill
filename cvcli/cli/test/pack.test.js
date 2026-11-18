@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { defaultPackageName, validatePackageName, normalizeRepo, selfCommand, packCommandFor, quoteArg } from "../lib/pack.js";
+import { defaultPackageName, validatePackageName, normalizeRepo, selfCommand, packCommandFor, quoteArg, writeText } from "../lib/pack.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, "..", "bin", "cvcli.js");
@@ -51,7 +51,7 @@ test("successful pack creates every file and prints the three commands", (t) => 
   const r = cli(cwd, "pack", SAMPLE, "--name", "ada-cv", "--yes");
   assert.equal(r.status, 0, r.stderr);
   const dir = path.join(cwd, "ada-cv");
-  for (const f of ["package.json", "cv.json", "bin/cli.js", "README.md", "PUBLISHING.md", ".gitignore",
+  for (const f of ["package.json", "cv.json", "bin/cli.js", "README.md", "PUBLISHING.md", ".gitignore", ".gitattributes",
     ".github/workflows/check.yml", ".github/workflows/publish.yml"]) {
     assert.ok(fs.existsSync(path.join(dir, f)), `missing ${f}`);
   }
@@ -133,7 +133,8 @@ test("--force keeps version, README.md and .git", (t) => {
   fs.mkdirSync(path.join(dir, ".git"));
   fs.writeFileSync(path.join(dir, ".git", "HEAD"), "ref: refs/heads/main\n");
   const cvFile = path.join(cwd, "CV.md");
-  fs.writeFileSync(cvFile, fs.readFileSync(SAMPLE, "utf8").replace("Junior DevOps Engineer\n", "Platform Engineer\n"));
+  // \r? because a Windows checkout may have CRLF line endings.
+  fs.writeFileSync(cvFile, fs.readFileSync(SAMPLE, "utf8").replace(/Junior DevOps Engineer\r?\n/, "Platform Engineer\n"));
   const r = cli(cwd, "pack", cvFile, "--name", "ada-cv", "--yes", "--force");
   assert.equal(r.status, 0, r.stderr);
   assert.equal(readJson(pkgFile).version, "1.2.0");
@@ -255,4 +256,51 @@ test("--force keeps the existing look for flags that are not given", (t) => {
   const r = cli(dir, "pack", SAMPLE, "--name", "ada-cv", "--yes", "--force", "--accent", "green");
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(readJson(path.join(dir, "ada-cv", "cv.json")).display, { layout: "manpage", accent: "green" });
+});
+
+// Line endings (spec: cv-package-generator, "LF line endings in the generated package").
+
+/** Every file under dir, as paths relative to dir. */
+function listFiles(dir, base = dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    return e.isDirectory() ? listFiles(full, base) : [path.relative(base, full)];
+  });
+}
+
+test("writeText turns CRLF and lone CR into LF", (t) => {
+  const file = path.join(tmp(t), "out.txt");
+  writeText(file, "#!/usr/bin/env node\r\nline 2\rline 3\nend\r\n");
+  assert.equal(fs.readFileSync(file, "utf8"), "#!/usr/bin/env node\nline 2\nline 3\nend\n");
+});
+
+test("pack writes LF only, even from a CRLF CV.md", (t) => {
+  const cwd = tmp(t);
+  const cvFile = path.join(cwd, "CV.md");
+  fs.writeFileSync(cvFile, fs.readFileSync(SAMPLE, "utf8").replace(/\r?\n/g, "\r\n"));
+  const r = cli(cwd, "pack", cvFile, "--name", "ada-cv", "--yes");
+  assert.equal(r.status, 0, r.stderr);
+  const dir = path.join(cwd, "ada-cv");
+  const files = listFiles(dir);
+  assert.ok(files.length >= 9, files.join(", "));
+  for (const f of files) {
+    assert.ok(!fs.readFileSync(path.join(dir, f), "utf8").includes("\r"), `${f} contains \r`);
+  }
+  assert.ok(fs.readFileSync(path.join(dir, "bin", "cli.js"), "utf8").startsWith("#!/usr/bin/env node\n"));
+});
+
+test("a new package has a .gitattributes with the LF rule", (t) => {
+  const cwd = tmp(t);
+  cli(cwd, "pack", SAMPLE, "--name", "ada-cv", "--yes");
+  assert.match(fs.readFileSync(path.join(cwd, "ada-cv", ".gitattributes"), "utf8"), /^\* text=auto eol=lf$/m);
+});
+
+test("--force keeps the user's own .gitattributes", (t) => {
+  const cwd = tmp(t);
+  cli(cwd, "pack", SAMPLE, "--name", "ada-cv", "--yes");
+  const file = path.join(cwd, "ada-cv", ".gitattributes");
+  fs.writeFileSync(file, "* text=auto eol=lf\n*.pdf binary\n");
+  const r = cli(cwd, "pack", SAMPLE, "--name", "ada-cv", "--yes", "--force");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.readFileSync(file, "utf8"), "* text=auto eol=lf\n*.pdf binary\n");
 });
