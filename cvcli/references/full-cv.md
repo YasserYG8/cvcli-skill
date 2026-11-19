@@ -11,7 +11,7 @@ Build a complete `CV.md` from the user's real sources. Output format: `templates
 - 5. Write CV.md (section rules)
 - 6. Self-check
 - 7. Save and report
-- 8. Terminal CV (optional)
+- 8. Next step (offer)
 - Privacy
 
 ## Checklist
@@ -25,12 +25,12 @@ cvcli full CV progress:
 - [ ] 5. Write CV.md
 - [ ] 6. Self-check
 - [ ] 7. Save and report
-- [ ] 8. Terminal CV (optional, ask first)
+- [ ] 8. Offer the next step (style, share or nothing)
 ```
 
 ## 1. Collect sources
 
-Use every source the user gives. Read each one fully. Give each a short tag; you will cite tags in the profile sheet.
+If the user has not named any sources, ask once which ones you can use: an old CV file, a website, LinkedIn text, GitHub repos or a GitHub profile. Default: the git repos in the current folder. Use every source the user gives. Read each one fully. Give each a short tag; you will cite tags in the profile sheet.
 
 | Source | How to read | Tag |
 | --- | --- | --- |
@@ -129,21 +129,18 @@ If a check fails, fix it and check again.
 - Do not put source tags in the saved file. Show them in the report instead.
 - Report in chat: the path, a short **Changes vs old CV** list (removed claims, added strengths), and **Flags** (unsupported claims, unverified counts, placeholders to fill, source conflicts).
 
-## 8. Terminal CV (optional)
+## 8. Offer the next step
 
-Ask: "Do you want a terminal version of your CV, that people can run with `npx`?" Run nothing without a yes.
+After the report, offer what can come next, in plain words, in one message:
 
-The CLI is bundled with this skill. Below, `CVCLI` means `node ${CLAUDE_SKILL_DIR}/cli/bin/cvcli.js` (outside Claude Code: `node <skill-folder>/cli/bin/cvcli.js`).
+```
+Your CV is ready. What next?
+- Choose how your terminal CV looks (/cvcli style)
+- Share it: a version people open in their terminal with one command (/cvcli share)
+- Nothing for now
+```
 
-1. Run `node --version`. If it fails or is below 18, say the terminal CV needs Node.js 18+, and stop (CV.md is the result).
-2. Run `CVCLI check <CV.md>`. On errors, fix CV.md (honesty rules still apply) and check again.
-3. If the check lists `Placeholder to fill`, show them and ask for the missing facts. Pack anyway only if the user says "skip".
-4. Ask which contact fields to put in the package (email, phone, website, GitHub, LinkedIn). Say that the package becomes public when pushed or published. Include the phone only if the user clearly says yes.
-5. Ask for the GitHub repo they will use (`user/repo`), or "later".
-6. Ask which look they want: layout `sidebar` (default, a card with a section list), `classic` (a paper CV in two columns) or `manpage` (a Unix manual page), and an accent color `teal` (default), `blue`, `violet`, `green` or `amber`. Suggest they try them first with `CVCLI view <CV.md> --gallery` in their own terminal (it is interactive, so do not run it yourself). "Default" is a fine answer.
-7. Run `CVCLI pack <CV.md> --yes [--include-phone] [--repo user/repo] [--name <name>] [--layout <name>] [--accent <color>]`. Use `--out` to put the folder outside a public repo if needed, and `--force` only to update a folder cvcli made before (it keeps the saved look unless you pass new flags).
-8. Run the local test: `npx --yes ./<folder> --print`, and show the first lines.
-9. Tell the user the next steps: run `npx ./<folder>` themselves for the interactive view; share with GitHub (`npx github:<user>/<repo>`); npm is optional, see `<folder>/PUBLISHING.md`. Never run `git push` or `npm publish` unless the user asks.
+Run no cvcli command without a yes. Default: nothing for now. If the user picks one, follow [style.md](style.md) or [share.md](share.md).
 
 ## Privacy
 

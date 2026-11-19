@@ -1,26 +1,56 @@
 ---
 name: cvcli
-description: Builds an honest, evidence-based developer CV as a CV.md file, or turns one git repository into CV bullets, a LinkedIn post, an X/Twitter post or a portfolio card, in English or French. Scans repos (languages, frameworks, infra, tests, git history), reads the user's old CV, website or profile text, asks a few questions, then writes only claims the sources or the user can back up. Use when the user asks to write, build, update or check their CV or resume, create a CV.md, or turn a project, repo or codebase into CV or resume bullets, a portfolio entry, a LinkedIn post, a tweet or X thread.
+description: Builds an honest, evidence-based developer CV as a CV.md file, turns one git repository into CV bullets, a portfolio card, a LinkedIn post or an X/Twitter post, in English or French, and turns CV.md into a terminal CV that people run with npx. Commands - /cvcli (start menu), /cvcli cv, /cvcli project, /cvcli post, /cvcli style, /cvcli share. Scans repos (languages, frameworks, infra, tests, git history), reads the user's old CV, website or profile text, asks a few questions, then writes only claims the sources or the user can back up. Use when the user asks to write, build, update or check their CV or resume, create a CV.md, turn a project, repo or codebase into CV or resume bullets, a portfolio entry, a LinkedIn post, a tweet or X thread, or make, style or share a terminal CV.
 license: MIT
 compatibility: Needs Python 3.9+ and git on PATH; the optional terminal CV also needs Node.js 18+. Built for Claude Code; works in any Agent Skills client that can run scripts.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # cvcli
 
 Turn a developer's real work into a CV and social content. Every claim must come from a source (code, git history, a document the user gave) or from the user.
 
-## Step 0: What does the user want?
+## How to talk to the user
 
-If the request is not clear, ask once, in one message:
-1. **Full CV** (a complete `CV.md`: summary, experience, projects, skills, education, languages, interests, contact) or **one project** (bullets, LinkedIn post, X post, portfolio card)?
-2. Language: English or French?
-3. For a full CV: which sources can you use? (old CV file, website, LinkedIn text, GitHub repos or profile)
+The user talks to you, not to a terminal. Many users do not know programming; they want the result.
 
-Then:
-- **Full CV** → read [references/full-cv.md](references/full-cv.md) (workflow) and [templates/cv-full.md](templates/cv-full.md) (output format), plus [references/cv-rules.md](references/cv-rules.md) and [references/style-guide.md](references/style-guide.md). Follow the full-cv.md workflow. The honesty rules below still apply. Its last step offers a **terminal CV**: the bundled CLI (`node ${CLAUDE_SKILL_DIR}/cli/bin/cvcli.js check|view|pack <CV.md>`) checks CV.md and packs it into a folder people can run with `npx`. Run it; do not read its source.
-- **One project** → follow the "Project workflow" below.
+1. **Results, not commands.** Run every command yourself and report what you made, in plain words ("Your terminal CV is ready in `MyCv/ada-cv/`, and the test worked."). Do not show flags or ask the user to run a command. Show a shell command only when the user asks for it, or when they must run it themselves: the interactive viewer (`view`, `--gallery`, `npx ./<folder>` without `--print`) needs a real, separate terminal window, because your shell is not interactive (Claude Code's `!` is not either).
+2. **Every question has a default.** Each question says what happens by default. "skip", "I don't know" and "you choose" are always valid: use the default and say in one line why it fits. For a missing fact, the default is a visible placeholder (`[metric?]`), never a guess (honesty rules below).
+3. **Language.** Write CVs and posts in English or French. Default: the language the user writes in.
+
+## Commands
+
+Pick the workflow from the first word after `/cvcli`. In Claude Code it arrives as an `ARGUMENTS:` line at the end of this file; in other clients, read the start of the user's message. Ignore case. The other words are the user's request (`/cvcli post linkedin, in French`).
+
+| Word | Workflow | Read first |
+| --- | --- | --- |
+| `cv` | **Full CV**: make or update `CV.md`. Follow the full-cv.md workflow. | [references/full-cv.md](references/full-cv.md), [templates/cv-full.md](templates/cv-full.md), [references/cv-rules.md](references/cv-rules.md), [references/style-guide.md](references/style-guide.md) |
+| `project` | **Project workflow** below. Outputs: CV bullets + portfolio card, unless the user asks for others. | the "Generate" table below |
+| `post` | **Project workflow** below. Outputs: a LinkedIn post and/or an X post. If the user did not name one, ask which (default: both). | the "Generate" table below |
+| `style` | **Look of the terminal CV**: the user describes it in their own words. | [references/style.md](references/style.md) |
+| `share` | **Share the CV**: make, test and share the terminal CV package. | [references/share.md](references/share.md) |
+
+- **No word, clear request** ("Write a LinkedIn post about this repo"): run the matching workflow directly.
+- **No word and no clear request** (just `/cvcli`, or "help me with my CV stuff"): show the start menu.
+- **Any other word**: treat the whole text as a plain request ("resume please" → `cv`). Never fail because a word is not a command.
+
+`style` and `share` use the CLI bundled with this skill: `node ${CLAUDE_SKILL_DIR}/cli/bin/cvcli.js check|view|pack <CV.md>`. Run it; do not read its source.
+
+### Start menu
+
+Ask once, in one message, in the user's language:
+
+```
+What would you like to do?
+1. Make or update your CV: I read your old CV, website and repos, and write CV.md.   (/cvcli cv)
+2. CV lines for a project: bullets and a portfolio card from one repo.               (/cvcli project)
+3. A post about a project: for LinkedIn, X or both.                                  (/cvcli post)
+4. The look of your terminal CV: tell me how it should feel.                         (/cvcli style)
+5. Share your CV: a version people open in their terminal with one command.          (/cvcli share)
+
+Answer with a number, a command or your own words. Not sure? Start with 1.
+```
 
 ## Honesty rules (non-negotiable)
 
@@ -56,7 +86,7 @@ cvcli project progress:
 
 ### 1. Scan
 
-Scan the repo (default: the current project folder). See "Scan a repo".
+Scan the repo (default: the current project folder; the user may give another path or a GitHub URL). See "Scan a repo".
 
 ### 2. Fact sheet
 
@@ -85,7 +115,7 @@ Accept "skip" for any question; keep placeholders then.
 
 ### 4. Generate
 
-Produce only the outputs the user asked for. Before writing, read the matching files:
+Produce only the outputs the user asked for, or the defaults of the command (`project`: CV bullets + portfolio card; `post`: the platforms chosen, default LinkedIn + X). Before writing, read the matching files:
 
 | Output | Read |
 | --- | --- |
@@ -95,7 +125,7 @@ Produce only the outputs the user asked for. Before writing, read the matching f
 | Portfolio card | [templates/portfolio-card.md](templates/portfolio-card.md) |
 | Any output | [references/style-guide.md](references/style-guide.md) (always) |
 
-Language: write in the language the user asked for. For French, use the French verb list in cv-rules.md and the French banned phrases in style-guide.md. Keep tech names in their original form (Docker, GitHub Actions).
+Language: write in the language the user asked for (default: the language they write in). For French, use the French verb list in cv-rules.md and the French banned phrases in style-guide.md. Keep tech names in their original form (Docker, GitHub Actions).
 
 ### 5. Self-check
 

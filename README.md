@@ -46,11 +46,18 @@ Requirements: Python 3.9+ and git. The optional terminal CV also needs Node.js 1
 
 ## Usage
 
-In Claude Code, inside your project:
+In Claude Code, inside your project, type `/cvcli` and a word, or just `/cvcli` to see a menu:
 
-```
-/cvcli
-```
+| Command | You get |
+| --- | --- |
+| `/cvcli` | a short menu of everything below |
+| `/cvcli cv` | a complete `CV.md` from your old CV, website and repos |
+| `/cvcli project` | CV bullets and a portfolio card for one repo |
+| `/cvcli post` | a LinkedIn post, an X post, or both |
+| `/cvcli style` | the look of your terminal CV, described in your own words ("calm", "like an old hacker screen") |
+| `/cvcli share` | a terminal CV people open with one command, tested, plus the steps to share it on GitHub or npm |
+
+You can add details after the word: `/cvcli post linkedin, in French`. You never need to run a command yourself: the AI runs them and tells you the result. Any question can be answered with "skip", "I don't know" or "you choose".
 
 Or just ask in plain words; the skill loads by itself:
 
@@ -61,7 +68,7 @@ Write a LinkedIn post about ~/code/shop-api, in French.
 Give me an X post and a portfolio card for this project.
 ```
 
-What happens:
+What happens with `/cvcli project` and `/cvcli post`:
 
 1. **Scan**: runs `scripts/scan_repo.py` and reads the JSON.
 2. **Fact sheet**: what the project is, stack, scale, infra, tests, contributors.
@@ -133,6 +140,8 @@ cvcli/                  # the skill (this is what you install)
 ├── SKILL.md            # workflow + honesty rules (short)
 ├── references/         # platform rules, loaded only when needed
 │   ├── full-cv.md      # full CV workflow
+│   ├── style.md        # /cvcli style: the look of the terminal CV
+│   ├── share.md        # /cvcli share: pack, test and share the terminal CV
 │   ├── cv-rules.md
 │   ├── linkedin.md
 │   ├── x.md
