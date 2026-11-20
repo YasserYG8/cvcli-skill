@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCv, formatProblems } from "../lib/parse.js";
 import { runViewer, parseViewerArgs, LAYOUTS, ACCENTS } from "../lib/viewer.js";
-import { pack, nextSteps, packCommandFor, selfCommand, quoteArg, PackError } from "../lib/pack.js";
+import { pack, nextSteps, galleryChoiceMessage, selfCommand, quoteArg, PackError } from "../lib/pack.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(HERE, "..", "package.json"), "utf8")).version;
@@ -93,10 +93,8 @@ async function view(file, argv) {
     process.stdout.write(formatProblems(file, errors, warnings).join("\n") + "\n");
     return 1;
   }
-  // After a gallery choice, show the pack command that keeps it.
-  const onChoice = (choice) => {
-    process.stdout.write(`Your choice: ${choice.layout} layout, ${choice.accent} accent. To keep it, run:\n\n  ${packCommandFor(file, choice)}\n`);
-  };
+  // After a gallery choice: tell AI-assistant users what to say, then show the pack command.
+  const onChoice = (choice) => process.stdout.write(galleryChoiceMessage(file, choice));
   return runViewer(cv, { ...parseViewerArgs(argv), onChoice });
 }
 

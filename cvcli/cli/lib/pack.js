@@ -70,6 +70,29 @@ function isNonEmptyDir(dir) {
   }
 }
 
+/**
+ * Older versions of pack wrote to ./<name> in the current folder. If that folder holds a cvcli
+ * package for the same person, packing to the new default would make a second copy: stop.
+ */
+function refuseOldDefaultCopy(oldDir, newDir, personName) {
+  if (oldDir === newDir) return;
+  const has = (f) => fs.existsSync(path.join(oldDir, f));
+  if (!has("package.json") || !has("cv.json") || !has(path.join("bin", "cli.js"))) return;
+  let oldName;
+  try { oldName = JSON.parse(fs.readFileSync(path.join(oldDir, "cv.json"), "utf8")).meta.name; } catch { return; }
+  if (oldName !== personName) return;
+  const shown = (d) => {
+    const rel = path.relative(process.cwd(), d).split(path.sep).join("/");
+    return rel.startsWith(".") || path.isAbsolute(rel) ? rel : `./${rel}`;
+  };
+  throw new PackError([
+    `A package for ${personName} already exists in ${shown(oldDir)}.`,
+    `pack now creates the package next to CV.md (${shown(newDir)}), so this would make a second copy.`,
+    `To update the existing package, run pack again with: --out ${shown(oldDir)} --force`,
+    `Or move ${shown(oldDir)} next to CV.md first.`,
+  ].join("\n"));
+}
+
 /** Decide which contact fields go into cv.json. */
 async function chooseContacts(meta, opts, io) {
   const present = CONTACT_KEYS.filter((k) => meta[k]);
@@ -120,8 +143,10 @@ export async function pack(file, opts = {}, io = { stdin: process.stdin, stdout:
   if (opts.repo && !repo) throw new PackError(`--repo must look like user/repo, got "${opts.repo}"`);
 
   const binName = name.split("/").pop();
-  const dir = path.resolve(opts.out || binName);
+  // Default: next to CV.md, so the result does not depend on the current folder.
+  const dir = path.resolve(opts.out || path.join(path.dirname(file), binName));
   const exists = isNonEmptyDir(dir);
+  if (!opts.out && !exists) refuseOldDefaultCopy(path.resolve(binName), dir, cv.meta.name);
   if (exists && !opts.force) {
     throw new PackError(`Folder ${dir} already exists and is not empty.\nTo update it, run pack again with --force (it keeps your version, README.md and .git).`);
   }
@@ -215,6 +240,21 @@ export function selfCommand({ argv1 = process.argv[1] || "", cwd = process.cwd()
 /** The pack command that keeps a look chosen in the gallery. */
 export function packCommandFor(file, { layout, accent }, self = selfCommand()) {
   return `${self} pack ${quoteArg(file)} --layout ${layout} --accent ${accent}`;
+}
+
+/**
+ * Printed after Enter in the gallery. Most people open the gallery because their AI
+ * assistant told them to, so the first instruction is for them; the command comes last.
+ */
+export function galleryChoiceMessage(file, { layout, accent }, self = selfCommand()) {
+  return [
+    `Your choice: ${layout} layout, ${accent} accent.`,
+    `Using an AI assistant? Just tell it: "${layout}, ${accent}".`,
+    "Or save it yourself:",
+    "",
+    `  ${packCommandFor(file, { layout, accent }, self)}`,
+    "",
+  ].join("\n");
 }
 
 /** The "what next" text printed after a successful pack. */

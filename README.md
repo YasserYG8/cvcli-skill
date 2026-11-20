@@ -91,7 +91,7 @@ After writing your `CV.md`, cvcli can turn it into a CV that people run in their
 ```bash
 npx github:YasserYG8/cvcli-skill check CV.md     # check the format and list [placeholders?]
 npx github:YasserYG8/cvcli-skill view CV.md      # preview it (letters jump to sections, t changes the layout, q quits)
-npx github:YasserYG8/cvcli-skill pack CV.md      # make a shareable folder, e.g. ./ada-lovelace-cv/
+npx github:YasserYG8/cvcli-skill pack CV.md      # make a shareable folder next to CV.md, e.g. ./ada-lovelace-cv/
 ```
 
 **Choose a look.** There are 3 layouts and 5 accent colors:
@@ -110,9 +110,9 @@ cvcli view CV.md --layout classic --accent violet   # preview one look
 cvcli pack CV.md --layout classic --accent violet   # save it as the default of your package
 ```
 
-The look is saved in the package's `cv.json`, not in `CV.md`. People who run your CV can press `t` to switch layouts. `--print` is always plain text, the same for every layout.
+After Enter, the gallery prints your choice. If you use cvcli through an AI assistant, just tell it the choice (for example "classic, violet"); otherwise run the `pack` command the gallery prints. The look is saved in the package's `cv.json`, not in `CV.md`. People who run your CV can press `t` to switch layouts. `--print` is always plain text, the same for every layout.
 
-`pack` asks which contact details to include (the phone is off by default), then creates a small package with **no dependencies and no build step**. You can share it at three levels:
+`pack` asks which contact details to include (the phone is off by default), then creates a small package with **no dependencies and no build step**, in a folder next to `CV.md` (use `--out` to choose another folder). You can share it at three levels:
 
 | Level | People run | You need |
 | --- | --- | --- |

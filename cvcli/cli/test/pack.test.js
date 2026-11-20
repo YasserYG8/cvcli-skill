@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { defaultPackageName, validatePackageName, normalizeRepo, selfCommand, packCommandFor, quoteArg, writeText } from "../lib/pack.js";
+import { defaultPackageName, validatePackageName, normalizeRepo, selfCommand, packCommandFor, galleryChoiceMessage, quoteArg, writeText } from "../lib/pack.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, "..", "bin", "cvcli.js");
@@ -18,7 +18,16 @@ function tmp(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
-const cli = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", input: "" });
+/** Copy the sample CV to <dir>/CV.md (once) and return its path. */
+function sampleIn(dir) {
+  const file = path.join(dir, "CV.md");
+  if (!fs.existsSync(file)) fs.copyFileSync(SAMPLE, file);
+  return file;
+}
+// pack puts the package next to CV.md, so a test that passes SAMPLE gets a copy in its own
+// temp folder instead. Nothing is ever written into fixtures/.
+const cli = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args.map((a) => (a === SAMPLE ? sampleIn(cwd) : a))],
+  { cwd, encoding: "utf8", input: "" });
 const npm = (cwd, ...args) => spawnSync(IS_WINDOWS ? "npm.cmd" : "npm", args, { cwd, encoding: "utf8", shell: IS_WINDOWS });
 const hasNpm = npm(os.tmpdir(), "--version").status === 0;
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -303,4 +312,77 @@ test("--force keeps the user's own .gitattributes", (t) => {
   const r = cli(cwd, "pack", SAMPLE, "--name", "ada-cv", "--yes", "--force");
   assert.equal(r.status, 0, r.stderr);
   assert.equal(fs.readFileSync(file, "utf8"), "* text=auto eol=lf\n*.pdf binary\n");
+});
+
+// Output folder (spec: cv-package-generator, "Safe output folder").
+
+/** Write the sample CV to <cwd>/<rel> (optionally with another person's name) and return the path. */
+function cvAt(cwd, rel, name) {
+  const file = path.join(cwd, rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  let text = fs.readFileSync(SAMPLE, "utf8");
+  if (name) text = text.replace(/^name: .*$/m, `name: ${name}`);
+  fs.writeFileSync(file, text);
+  return file;
+}
+
+test("default folder is next to CV.md, not the current folder", (t) => {
+  const cwd = tmp(t);
+  cvAt(cwd, "docs/CV.md");
+  const r = cli(cwd, "pack", "docs/CV.md", "--name", "ada-cv", "--yes");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(cwd, "docs", "ada-cv", "cv.json")));
+  assert.ok(!fs.existsSync(path.join(cwd, "ada-cv")));
+  assert.match(r.stdout, /Created \.\/docs\/ada-cv\//);
+});
+
+test("--out wins over the default folder", (t) => {
+  const cwd = tmp(t);
+  cvAt(cwd, "docs/CV.md");
+  const r = cli(cwd, "pack", "docs/CV.md", "--name", "ada-cv", "--yes", "--out", "out/ada-cv");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(cwd, "out", "ada-cv", "cv.json")));
+  assert.ok(!fs.existsSync(path.join(cwd, "docs", "ada-cv")));
+});
+
+test("no second copy: an old package in the current folder stops pack", (t) => {
+  const cwd = tmp(t);
+  cvAt(cwd, "CV.md");
+  assert.equal(cli(cwd, "pack", "CV.md", "--name", "ada-cv", "--yes").status, 0); // ./ada-cv, like the old default
+  cvAt(cwd, "docs/CV.md");
+  const r = cli(cwd, "pack", "docs/CV.md", "--name", "ada-cv", "--yes", "--force");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /\.\/ada-cv/);
+  assert.match(r.stderr, /docs\/ada-cv/);
+  assert.match(r.stderr, /--out \.\/ada-cv --force/);
+  assert.ok(!fs.existsSync(path.join(cwd, "docs", "ada-cv")));
+  // The suggested command works.
+  assert.equal(cli(cwd, "pack", "docs/CV.md", "--name", "ada-cv", "--yes", "--out", "./ada-cv", "--force").status, 0);
+});
+
+test("a package for another person in the current folder does not stop pack", (t) => {
+  const cwd = tmp(t);
+  cvAt(cwd, "CV.md", "Ada Lovelace");
+  assert.equal(cli(cwd, "pack", "CV.md", "--name", "ada-cv", "--yes").status, 0);
+  cvAt(cwd, "docs/CV.md");
+  const r = cli(cwd, "pack", "docs/CV.md", "--name", "ada-cv", "--yes");
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(path.join(cwd, "docs", "ada-cv", "cv.json")));
+});
+
+// Gallery message (spec: cv-layouts, "Gallery mode").
+
+test("gallery message: the choice, the AI line, then the pack command", () => {
+  const self = "node cvcli/cli/bin/cvcli.js";
+  const lines = galleryChoiceMessage("MyCv/CV.md", { layout: "classic", accent: "violet" }, self).split("\n");
+  assert.equal(lines[0], "Your choice: classic layout, violet accent.");
+  assert.equal(lines[1], 'Using an AI assistant? Just tell it: "classic, violet".');
+  assert.equal(lines[2], "Or save it yourself:");
+  const command = lines.filter((l) => l.trim()).pop().trim();
+  assert.equal(command, "node cvcli/cli/bin/cvcli.js pack MyCv/CV.md --layout classic --accent violet");
+});
+
+// Keep this test last: the pack tests above must not write into fixtures/.
+test("the fixtures folder holds only its own files", () => {
+  assert.deepEqual(fs.readdirSync(path.dirname(SAMPLE)).sort(), ["sample-cv.md"]);
 });

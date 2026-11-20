@@ -49,7 +49,8 @@ You cannot show the look in the chat: the viewer needs a real terminal. Offer th
 Want to see it, and try the other looks? Open a separate terminal window and run:
   <CVCLI> view <CV.md> --gallery
 Press t to change the layout, a to change the color, Enter to choose, q to quit.
-Then tell me what you picked.
+Then just tell me what you picked, for example "manpage, green". The gallery also
+prints a command at the end: you don't need to run it, I'll save the look for you.
 ```
 
 Write the real path instead of `<CVCLI>` (it must work when pasted into a new terminal). Say that Claude Code's `!` does not work for this, because it is not a real terminal. If the user tells you what they picked, use it.
