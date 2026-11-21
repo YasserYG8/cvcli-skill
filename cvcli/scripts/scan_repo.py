@@ -15,11 +15,12 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-SCANNER_VERSION = "0.1.0"
+SCANNER_VERSION = "0.2.0"
 
 # The README excerpt is sent to the model, so we keep it short.
 README_EXCERPT_CHARS = 1500
@@ -50,6 +51,10 @@ SKIP_DIRS = {
 # Hidden folders are skipped (tool config, AI agent folders like .claude/.agents,
 # caches), except these, which hold CI and dev-environment files.
 KEEP_HIDDEN_DIRS = {".github", ".gitlab", ".circleci", ".devcontainer", ".gitea", ".buildkite"}
+
+# A terminal CV made by `cvcli pack` has these files, and this keyword in package.json.
+CV_PACKAGE_FILES = (("package.json",), ("cv.json",), ("bin", "cli.js"))
+CV_PACKAGE_KEYWORD = "cvcli"
 
 LOCK_FILES = {
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "npm-shrinkwrap.json",
@@ -208,8 +213,12 @@ def unique(items: List[str]) -> List[str]:
 
 # ---------------------------------------------------------------- file walk
 
-def walk_repo(root: str, errors: List[str]) -> List[str]:
-    """Return all files to consider (absolute paths), skipping noise folders."""
+def walk_repo(root: str, errors: List[str], cv_packages: List[str]) -> List[str]:
+    """Return all files to consider (absolute paths), skipping noise folders.
+
+    Subfolders that hold a packed terminal CV are skipped too; their
+    repo-relative paths are added to cv_packages.
+    """
     files = []
 
     def on_error(err: OSError) -> None:
@@ -217,11 +226,72 @@ def walk_repo(root: str, errors: List[str]) -> List[str]:
             rel(root, err.filename or root), err.strerror or err))
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=on_error):
+        kept = []
+        for name in sorted(dirnames):
+            if is_skipped_dir(name):
+                continue
+            folder = os.path.join(dirpath, name)
+            if is_cv_package(folder):
+                cv_packages.append(rel(root, folder))
+                continue
+            kept.append(name)
         # Edit dirnames in place so os.walk does not enter skipped folders.
-        dirnames[:] = sorted(d for d in dirnames if not is_skipped_dir(d))
+        dirnames[:] = kept
         for name in sorted(filenames):
             files.append(os.path.join(dirpath, name))
     return files
+
+
+def is_cv_package(folder: str) -> bool:
+    """A terminal CV made by `cvcli pack`: generated code, not the user's own work."""
+    if not all(os.path.isfile(os.path.join(folder, *parts)) for parts in CV_PACKAGE_FILES):
+        return False
+    try:
+        data = json.loads(read_text(os.path.join(folder, "package.json")))
+    except (OSError, ValueError):
+        return False
+    keywords = data.get("keywords") if isinstance(data, dict) else None
+    return isinstance(keywords, list) and CV_PACKAGE_KEYWORD in keywords
+
+
+def git_visible_files(root: str, errors: List[str]) -> Optional[set]:
+    """Repo-relative paths that git tracks or would add (not ignored).
+
+    Returns None when the git filter does not apply: no git, not a work tree,
+    or the scanned folder itself is ignored by its repo. Then every walked file counts.
+    """
+    try:
+        check = run_git(root, ["rev-parse", "--is-inside-work-tree"])
+        if check.returncode != 0 or check.stdout.strip() != "true":
+            return None
+        # Exit 0: the scanned folder is inside an ignored folder of a bigger repo.
+        if run_git(root, ["check-ignore", "-q", "."]).returncode == 0:
+            return None
+    except (OSError, subprocess.SubprocessError):
+        return None  # scan_git reports a missing git
+    try:
+        listing = run_git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"])
+    except (OSError, subprocess.SubprocessError) as err:
+        errors.append("git ls-files failed, git-ignored files are counted: {}".format(err))
+        return None
+    if listing.returncode != 0:
+        errors.append("git ls-files failed, git-ignored files are counted: {}".format(
+            listing.stderr.strip()))
+        return None
+    return {nfc(path) for path in listing.stdout.split("\0") if path}
+
+
+def nfc(path: str) -> str:
+    """git and os.walk may spell accented names differently (macOS)."""
+    return unicodedata.normalize("NFC", path)
+
+
+def drop_git_ignored(root: str, files: List[str], visible: Optional[set]):
+    """Keep the files git lists; return (files, number dropped or None)."""
+    if visible is None:
+        return files, None
+    kept = [path for path in files if nfc(rel(root, path)) in visible]
+    return kept, len(files) - len(kept)
 
 
 def is_skipped_dir(name: str) -> bool:
@@ -781,7 +851,11 @@ def scan(path: str) -> Dict:
         "path": root.replace(os.sep, "/"),
         "repo_name": os.path.basename(root.rstrip("/\\")) or root,
     }
-    files = safe("walk", errors, walk_repo, root, errors, default=[])
+    cv_packages: List[str] = []
+    files = safe("walk", errors, walk_repo, root, errors, cv_packages, default=[])
+    visible = safe("git ls-files", errors, git_visible_files, root, errors)
+    files, ignored_by_git = drop_git_ignored(root, files, visible)
+    result["skipped"] = {"ignored_by_git": ignored_by_git, "cv_packages": sorted(cv_packages)}
     result["readme"] = safe("readme", errors, scan_readme, root)
     result["license"] = safe("license", errors, scan_license, root)
     result["languages"] = safe("languages", errors, scan_languages, root, files, errors)

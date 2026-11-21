@@ -82,7 +82,7 @@ Ask at most 5 questions, in one message, only about gaps the sources cannot fill
 - Role in team projects (when git shows other significant contributors).
 - Measurable results only the user knows (users, grades, time saved).
 - Interests outside work (optional; skip the section if none).
-- Contact details: which ones to include (phone? full address? only city and country?).
+- Contact details: which ones to include. Show what the sources have (SKILL.md rule 4), e.g. "Your PDF has the phone +216 … and the address …. Show them? (default: no, city and country are enough)". Default for phone and street address: no.
 
 Accept "skip". Keep placeholders for skipped facts.
 

@@ -18,6 +18,7 @@ The user talks to you, not to a terminal. Many users do not know programming; th
 1. **Results, not commands.** Run every command yourself and report what you made, in plain words ("Your terminal CV is ready in `MyCv/ada-cv/`, and the test worked."). Do not show flags or ask the user to run a command. Show a shell command only when the user asks for it, or when they must run it themselves: the interactive viewer (`view`, `--gallery`, `npx ./<folder>` without `--print`) needs a real, separate terminal window, because your shell is not interactive (Claude Code's `!` is not either).
 2. **Every question has a default.** Each question says what happens by default. "skip", "I don't know" and "you choose" are always valid: use the default and say in one line why it fits. For a missing fact, the default is a visible placeholder (`[metric?]`), never a guess (honesty rules below).
 3. **Language.** Write CVs and posts in English or French. Default: the language the user writes in.
+4. **Show what you found.** When you ask about a fact you found in a source (old CV, website, profile text, repo), show the value and say where it came from, so the user does not think it was missed: "Your PDF has the phone +216 …. Show it on the CV? (default: no)". If no source has it, say so. Show found values only in the conversation.
 
 ## Commands
 
@@ -67,7 +68,7 @@ Answer with a number, a command or your own words. Not sure? Start with 1.
 python3 ${CLAUDE_SKILL_DIR}/scripts/scan_repo.py <repo-path>
 ```
 
-Use `python` if `python3` is not found (common on Windows). Outside Claude Code, the script is `scripts/scan_repo.py` in this skill's folder. It prints JSON. If `readme.truncated` is true and you need more context, read the README file itself. Do not read the script source; run it.
+Use `python` if `python3` is not found (common on Windows). Outside Claude Code, the script is `scripts/scan_repo.py` in this skill's folder. It prints JSON. If you save that JSON to a file, save it in the system temp folder (or your client's scratch folder), never in the scanned repo, the CV folder or any other user folder. Git-ignored files and packed terminal CVs are not counted; `skipped` says what was left out. If `readme.truncated` is true and you need more context, read the README file itself. Do not read the script source; run it.
 
 For a GitHub URL, clone it first into a temporary folder (outside the user's project): `git clone --quiet <url> <tmp>/<name>`, then scan that folder. Only read and scan cloned code; never run it.
 
@@ -100,7 +101,7 @@ Show this short fact sheet. Use only the scan JSON and the README. Write "unknow
 - Infra & tests: <Docker / CI / K8s / Terraform / Ansible found> · tests: <yes (frameworks) / no>
 - Contributors: <n significant, with names>; you: <current_user.share>% of commits, <current_user.lines_added_share>% of added lines
 - Notable features: <only items named in the README or visible from file names>
-- Flags: <README claims not backed by the scan; scan errors>
+- Flags: <README claims not backed by the scan; scan errors; folders in skipped.cv_packages: "generated terminal CV, not counted">
 ```
 
 ### 3. Ask

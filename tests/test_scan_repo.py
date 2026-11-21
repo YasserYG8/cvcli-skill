@@ -301,6 +301,117 @@ def test_hidden_tool_folders_are_skipped(tmp_path):
     assert result["infra"]["github_workflows"] == [".github/workflows/ci.yml"]
 
 
+def lines_of(result, language):
+    for entry in result["languages"]:
+        if entry["language"] == language:
+            return entry["lines"]
+    return 0
+
+
+def write_cv_package(root: Path, folder: str, keyword: bool = True) -> None:
+    """A packed terminal CV, as `cvcli pack` makes it."""
+    keywords = ["cv", "resume", "terminal"] + (["cvcli"] if keyword else [])
+    write(root, folder + "/package.json", json.dumps({
+        "name": "ada-cv", "bin": {"ada-cv": "bin/cli.js"}, "keywords": keywords,
+        "dependencies": {"express": "^4.0.0"},
+    }))
+    write(root, folder + "/cv.json", json.dumps({"format": 1, "meta": {"name": "Ada"}}))
+    write(root, folder + "/bin/cli.js", "console.log(1);\n" * 300)
+
+
+@needs_git
+def test_git_ignored_files_are_skipped(tmp_path):
+    git_init(tmp_path)
+    write(tmp_path, ".gitignore", "local-data/\n")
+    write(tmp_path, "main.py", "print(1)\n")
+    write(tmp_path, "local-data/script.js", "var a = 1;\n" * 500)
+    commit(tmp_path, "init", ALICE, "2026-01-01T10:00:00+00:00")
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "JavaScript") == 0
+    assert lines_of(result, "Python") == 1
+    assert result["skipped"]["ignored_by_git"] == 1
+
+
+@needs_git
+def test_untracked_and_tracked_but_matched_files_are_counted(tmp_path):
+    git_init(tmp_path)
+    write(tmp_path, "build.sh", "echo hi\n")
+    commit(tmp_path, "init", ALICE, "2026-01-01T10:00:00+00:00")
+    write(tmp_path, ".gitignore", "*.sh\n")          # added after build.sh was committed
+    write(tmp_path, "src/new.py", "print(1)\nprint(2)\n")  # not committed, not ignored
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "Python") == 2
+    assert lines_of(result, "Shell") == 1
+    assert result["skipped"]["ignored_by_git"] == 0
+
+
+@needs_git
+def test_tracked_cv_package_is_skipped(tmp_path):
+    git_init(tmp_path)
+    write(tmp_path, "main.py", "print(1)\n")
+    write_cv_package(tmp_path, "tools/ada-cv")
+    commit(tmp_path, "init", ALICE, "2026-01-01T10:00:00+00:00")
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "JavaScript") == 0
+    assert result["manifests"] == []
+    assert result["skipped"]["cv_packages"] == ["tools/ada-cv"]
+
+
+def test_cv_package_look_alike_is_counted(tmp_path):
+    write_cv_package(tmp_path, "vision", keyword=False)
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "JavaScript") == 300
+    assert [m["file"] for m in result["manifests"]] == ["vision/package.json"]
+    assert result["skipped"]["cv_packages"] == []
+
+
+def test_cv_package_as_root_is_scanned(tmp_path):
+    write_cv_package(tmp_path, "ada-cv")
+    result = scan_repo.scan(str(tmp_path / "ada-cv"))
+    assert lines_of(result, "JavaScript") == 300
+    assert result["skipped"]["cv_packages"] == []
+
+
+def test_folder_without_git_keeps_all_files(tmp_path):
+    write(tmp_path, "app.py", "print(1)\n")
+    write(tmp_path, "local-data/script.js", "var a = 1;\n")
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "Python") == 1
+    assert lines_of(result, "JavaScript") == 1
+    assert result["skipped"] == {"ignored_by_git": None, "cv_packages": []}
+    assert result["scanner_version"] == "0.2.0"
+
+
+def test_git_not_installed_keeps_all_files(tmp_path, monkeypatch):
+    write(tmp_path, "app.py", "print(1)\n")
+
+    def no_git(*args, **kwargs):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(scan_repo.subprocess, "run", no_git)
+    result = scan_repo.scan(str(tmp_path))
+    assert lines_of(result, "Python") == 1
+    assert result["skipped"]["ignored_by_git"] is None
+
+
+@needs_git
+def test_ignored_folder_scanned_directly_keeps_its_files(tmp_path):
+    """Scanning a folder that its parent repo ignores (e.g. MyCv/) must not drop everything."""
+    git_init(tmp_path)
+    write(tmp_path, ".gitignore", "side/\n")
+    write(tmp_path, "side/tool.py", "print(1)\n")
+    result = scan_repo.scan(str(tmp_path / "side"))
+    assert lines_of(result, "Python") == 1
+    assert result["skipped"]["ignored_by_git"] is None
+
+
+@needs_git
+def test_nothing_skipped_in_clean_repo(tmp_path):
+    git_init(tmp_path)
+    write(tmp_path, "main.py", "print(1)\n")
+    commit(tmp_path, "init", ALICE, "2026-01-01T10:00:00+00:00")
+    assert scan_repo.scan(str(tmp_path))["skipped"] == {"ignored_by_git": 0, "cv_packages": []}
+
+
 def test_broken_manifest_is_reported_not_fatal(tmp_path):
     write(tmp_path, "package.json", "{ not json")
     result = scan_repo.scan(str(tmp_path))
